@@ -69,4 +69,9 @@ try:
         else:
             st.error("Invalid Serial Number. No record updated.")
 
-  
+    # --- SECTION 3: FULL DATABASE VIEW ---
+    with st.expander("View Full Database"):
+        st.write(df)
+
+except FileNotFoundError:
+    st.error("Please ensure 'Fees.csv' is in the same folder as this script.")
