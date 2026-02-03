@@ -1,45 +1,77 @@
 import streamlit as st
 import pandas as pd
 
-# Set page title
-st.set_page_config(page_title="Fee Inquiry System")
+st.set_page_config(page_title="Fee Management System")
 
-st.title("💰 Fee Due Status Checker")
-st.write("Enter the Serial Number below to check the pending balance.")
+st.title("💳 Fee Payment & Tracking System")
 
-# Load the data from the CSV file
-@st.cache_data
+# Function to load data
 def load_data():
     return pd.read_csv('Fees.csv')
+
+# Function to save data
+def save_data(dataframe):
+    dataframe.to_csv('Fees.csv', index=False)
 
 try:
     df = load_data()
 
-    # Input field for Serial Number
-    sl_input = st.number_input("Enter SL NO:", min_value=int(df['SL NO'].min()), step=1)
-
-    if st.button("Check Due Amount"):
-        # Filter the dataframe
-        row = df[df['SL NO'] == sl_input]
-        
-        if not row.empty:
-            due_amount = row['Due'].values[0]
-            paid_amount = row['Paid'].values[0]
-            total_fees = row['Fees'].values[0]
-            
-            # Display results in a nice format
-            st.info(f"**Results for SL NO: {sl_input}**")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Total Fees", f"₹{total_fees}")
-            col2.metric("Paid", f"₹{paid_amount}")
-            col3.metric("Due", f"₹{due_amount}", delta_color="inverse")
-            
-            if due_amount == 0:
-                st.success("All fees are paid!")
-            else:
-                st.warning(f"Remaining balance to be paid: ₹{due_amount}")
+    # --- SECTION 1: SEARCH ---
+    st.header("1. Check Status")
+    search_sl = st.number_input("Enter SL NO to search:", min_value=1, step=1, key="search")
+    
+    if st.button("Search"):
+        record = df[df['SL NO'] == search_sl]
+        if not record.empty:
+            st.dataframe(record)
         else:
-            st.error(f"No record found for Serial Number {sl_input}.")
+            st.error("Record not found.")
+
+    st.divider()
+
+    # --- SECTION 2: SUBMIT PAYMENT ---
+    st.header("2. Submit New Payment")
+    
+    with st.form("payment_form"):
+        update_sl = st.number_input("Enter SL NO for Payment:", min_value=1, step=1)
+        new_payment = st.number_input("Enter Amount Paid Today:", min_value=0.0, step=100.0)
+        submit_button = st.form_submit_button("Submit Payment & Update Database")
+
+    if submit_button:
+        # Check if record exists
+        if update_sl in df['SL NO'].values:
+            # Find the index of the row
+            idx = df.index[df['SL NO'] == update_sl].tolist()[0]
+            
+            # Update values
+            current_paid = df.at[idx, 'Paid']
+            total_fees = df.at[idx, 'Fees']
+            
+            new_total_paid = current_paid + new_payment
+            new_due = total_fees - new_total_paid
+            
+            if new_due < 0:
+                st.error(f"Error: Payment exceeds total fees! Remaining due is only ₹{total_fees - current_paid}")
+            else:
+                # Apply changes to DataFrame
+                df.at[idx, 'Paid'] = new_total_paid
+                df.at[idx, 'Due'] = new_due
+                
+                # Save back to CSV
+                save_data(df)
+                
+                st.success(f"Successfully updated SL NO: {update_sl}")
+                st.balloons()
+                
+                # Show updated record
+                st.write("**Updated Record:**")
+                st.table(df[df['SL NO'] == update_sl])
+        else:
+            st.error("Invalid Serial Number. No record updated.")
+
+    # --- SECTION 3: FULL DATABASE VIEW ---
+    with st.expander("View Full Database"):
+        st.write(df)
 
 except FileNotFoundError:
-    st.error("Error: 'Fees.csv' not found. Please ensure the file is in the same folder as this script.")
+    st.error("Please ensure 'Fees.csv' is in the same folder as this script.")
